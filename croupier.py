@@ -36,19 +36,21 @@ class TexasHoldem(object):
         self.ant = ant
         self.players = players
 
-    def transaction(self, player, payment):
+    def transaction(self, player, payment, ant=False):
         """ operacao de transacao do player com o pot da rodada """
         value_transaction = 0
-        if player.stack > payment:
-            player.stack -= payment
-            self.pot += payment
+        if player.stack > payment-player.paid:
+            player.stack -= payment-player.paid
+            self.pot += payment-player.paid
             value_transaction = payment
             player.allin = False
-        elif player.stack < payment:
+            if not ant: player.paid = payment #ant nao conta
+        elif player.stack < payment-player.paid:
             self.pot = player.stack
             value_transaction = player.stack
             player.stack = 0
             player.allin = True
+            if not ant: player.paid = player.stack
 
             #player_handpot = self.pot
         return value_transaction
@@ -58,7 +60,10 @@ class TexasHoldem(object):
 
     def collect_ant(self, player):
         """ coleta os valores do ant e coloca no pote """
-        self.transaction(player, self.ant)
+        #zera variavel paid dos players
+        for player in itertools.ifilter(lambda player: player.active, self.players):
+            player.paid = 0
+        self.transaction(player, self.ant, ant=True)
 
 
 
@@ -89,16 +94,18 @@ class TexasHoldem(object):
     def betting(self, position_bet):
         """ funcao que controla a rodada de apostas 
         """
+        import pdb;pdb.set_trace()
         action = []
         blind = self.bigblind
         round_check = False
         def player_action(player, actions_player, blind):
             """ processa a acao do player """
-            action, value = actions
+            action, value = actions_player
             if action == 'fold': player.active = False
-            if action == 'check': value_transaction = self.transaction(player, blind)
-            if action == 'raise': value_transaction = self.transaction(player, value)
-            if action == 'bet': value_transaction = self.transaction(player, bind)
+            elif action == 'check': value_transaction = self.transaction(player, blind)
+            elif action == 'raise': value_transaction = self.transaction(player, value)
+            elif action == 'bet': value_transaction = self.transaction(player, bind)
+            else: raise 'Precisa escolher uma jogada'
             return value_transaction
 
         def check():
@@ -110,7 +117,8 @@ class TexasHoldem(object):
 
         while round_check == False:
            
-            if position_bet == 1: players = self.players[2:] 
+            if position_bet == 1 and len(self.players)>2: players = self.players[2:]
+            elif position_bet == 1 and len(self.players)<=2: players = self.players
             else: players = self.players
             for player in itertools.ifilter(lambda x: x.active, players):
                 player_action(player, player.do(blind, action), blind)
@@ -185,9 +193,7 @@ def test():
     assert len(game.deck) == 45
     game.collect_blind() #collect blind
     assert game.pot == 99
-    import pdb;pdb.set_trace()
     game.betting(1)
-    import pdb;pdb.set_trace()
     game.flop.extend(game.draw(game.deck, 5))
     assert len(game.flop) == 5
     game.flop = ['AS','AC','TD','JS','TS']
@@ -195,6 +201,7 @@ def test():
     jose.cards = ['4H','4S']
     juca.cards = ['7H','8S']
     game.pay()
+    import pdb;pdb.set_trace()
     assert joao.stack == 1536
     map(game.collect_ant, itertools.ifilter(lambda player: player.active, game.players)) #collect ant
     game.collect_blind() #collect blind

@@ -15,7 +15,7 @@ class Player(object):
 		self.nome = nome
 		self.stack = buyin
 		self.active = True
-	def do (self, bind, last_action):
+	def do(self, bind, last_action):
 		"""
 		"""
 		return 'check', 0
