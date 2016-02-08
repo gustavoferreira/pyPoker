@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 controla uma rodada de poker
 collect_ant = coleta o ant dos jogadores
@@ -11,6 +12,7 @@ pay = paga o pote aos vencedores
 import copy
 import itertools
 from player import Player
+from poker import *
 
 
 class TexasHoldem(object):
@@ -21,7 +23,7 @@ class TexasHoldem(object):
     deck = [r+s for r in '23456789TJQKA' for s in 'SHDC']
     
     players = [] #dealer is first position
-    flop = ""
+    flop = []
     pot = 0
     ant = 0
     smallblind = 0
@@ -34,40 +36,49 @@ class TexasHoldem(object):
         self.ant = ant
         self.players = players
 
+    def transaction(self, player, payment):
+        """ operacao de transacao do player com o pot da rodada """
+        value_transaction = 0
+        if player.stack > payment:
+            player.stack -= payment
+            self.pot += payment
+            value_transaction = payment
+            player.allin = False
+        elif player.stack < payment:
+            self.pot = player.stack
+            value_transaction = player.stack
+            player.stack = 0
+            player.allin = True
+
+            #player_handpot = self.pot
+        return value_transaction
     ### devolve cartas do deck
     def draw(self, deck, n): 
         return [deck.pop(0) for i in xrange(0, n)]
 
     def collect_ant(self, player):
         """ coleta os valores do ant e coloca no pote """
-        if player.stack > self.ant: 
-            player.stack -= self.ant
-            self.pot += self.ant
-            player.allin = False
-        elif player.stack > 0 and player.stack < self.ant:
-            self.pot = player.stack
-            player.stack = 0
-            player.allin = True
-            player_handpot = self.pot
+        self.transaction(player, self.ant)
+
+
 
     def collect_blind(self):
-        """ coleta os valores do ant e coloca no pote """
+        """ coleta os valores do blind e smallblind e coloca no pote """
         for pos, player in enumerate(self.players):
-            if pos == 0: blind = self.smallblind
-            elif pos == 1: blind = self.bigblind
-            else: blind = 0
+            if pos == 0:
+                blind = self.smallblind
+                player.smallblind = True
+                player.blind = False
+            elif pos == 1:
+                blind = self.bigblind
+                player.smallblind = False
+                player.blind = True
+            else:
+                blind = 0
+                player.paid = 0
+                player.smallblind = player.blind = player.allin = False
             #paga o small e o blind
-            if player.stack > blind: 
-                player.stack -= blind
-                self.pot += blind
-                player.paid = blind
-                player.allin = False
-            elif player.stack > 0 and player.stack < blind:
-                self.pot += player.blind
-                player.stack = 0
-                player.paid = blind
-                player.allin = True
-                player_handpot = self.pot
+            self.transaction(player, blind)
 
 
     def receives_card(self, player):
@@ -75,55 +86,87 @@ class TexasHoldem(object):
         """
         player.cards = self.draw(self.deck, 2)
 
-    def betting():
+    def betting(self, position_bet):
         """ funcao que controla a rodada de apostas 
         """
-        import pdb;pdb.set_trace()
-        blind = self.blind
-        while True:
+        action = []
+        blind = self.bigblind
+        round_check = False
+        def player_action(player, actions_player, blind):
+            """ processa a acao do player """
+            action, value = actions
+            if action == 'fold': player.active = False
+            if action == 'check': value_transaction = self.transaction(player, blind)
+            if action == 'raise': value_transaction = self.transaction(player, value)
+            if action == 'bet': value_transaction = self.transaction(player, bind)
+            return value_transaction
+
+        def check():
+            """ checa se o round acabou """
+            round_check = True
             for player in itertools.ifilter(lambda x: x.active, self.players):
-                player.do_action()
+                if player.paid < blind and not player.allin:
+                    round_check = False
 
-    def do_action(self, jogador):
-        """ acao a ser adotada pelo jogador 
-        call
-        bet
-        check
-        fold
-        """
-        action, value = jogador.do()
-        if action == 'call':
-            pass
-        if action == 'bet':
-            pass
-        if action == 'check':
-            pass
-        if action == 'fold':
-            pass
+        while round_check == False:
+           
+            if position_bet == 1: players = self.players[2:] 
+            else: players = self.players
+            for player in itertools.ifilter(lambda x: x.active, players):
+                player_action(player, player.do(blind, action), blind)
+                
+            #fez a primeira rodada de apostas e agora cobra do smallblind e do blind
+            if self.players[0].active: player_action(player, player.do(blind, action), blind) #vez do smallblind
+            elif self.players[1].active: player_action(player, player.do(blind, action), blind)
+                
+        #verifica se esta tudo pago, senao repete rodada de apostas
+            round_check = check()
 
-
-    def winners(self):
-        """ define o vencedor e paga o dinheiro para ele """
-        pass
 
     def pay(self):
-        """ paga os vencedores """
-        pass
+        """ define o vencedor e paga o dinheiro para ele """
+        #limpa a variavel best_hand
+        for player in self.players: player.best_hand=''
+        #add as cartas no flop do jogador (7 cartas)
+        map(lambda player: player.cards.extend(self.flop), 
+            itertools.ifilter(lambda player: player.active, self.players))
+        #acha a melhor mão de cada jogador)
+        for player in  itertools.ifilter(lambda player: player.active, self.players):
+            player.best_hand = poker([o for o in itertools.combinations(player.cards,5)])
+        #acha o vencedor
+        _players = filter(lambda player: player.active, self.players)
+        cards = []
+        map(lambda player: cards.extend(player.best_hand), self.players)
+        win = poker(cards)
+        #acha o vencedor e paga ele
+        _winners = filter(lambda player: player.best_hand[0] in win, self.players)
+        #confere
+        for o in _winners:
+            o.stack += self.pot/len(_winners)
+        self.pot = 0
+        #print self.players[0].cards
+        #print cartas
+        #map(lambda player: cards.append(poker([sorted([o for o in set(itertools.permutations(player.cards,5))], reverse=True)]), )
+        #poker(cards)
+        #import pdb;pdb.set_trace()
+        #win = poker(cards)
+
 
     def croupier(self):
         """ executa uma rodada de jogo """
         #embaralha as cartas
-        map(collect_ant, itertools.ifilter(lambda player: player.active, self.player)) #collect ant
+        shuffle2a(self.deck)
+        #cobra o ant
+        map(collect_ant, itertools.ifilter(lambda player: player.active, self.players)) #collect ant
         collect_blind() #collect small and big blind
         map(receives_card, itertools.ifilter(lambda player: player.active, self.players)) #distribuite cards
-        betting(1) #primeira rodada de apostas
-        self.cards = draw(self.deck, 3) #mostra flop
-        betting(2) # segunda rodada de apostas
-        self.cards.extend(draw(self.deck, 1)) #turn
-        betting(3) #terceira rodada de apostas
-        self.cards.extend(draw(self.deck, 1)) #river
-        betting(4) #quarta e ultima rodada de apostas
-        winner = winners() #define quem sao os vencedores
+        #betting(1) #primeira rodada de apostas
+        self.flop = draw(self.deck, 3) #mostra flop
+        #betting(2) # segunda rodada de apostas
+        self.flop.extend(draw(self.deck, 1)) #turn
+        #betting(3) #terceira rodada de apostas
+        self.flop.extend(draw(self.deck, 1)) #river
+        #betting(4) #quarta e ultima rodada de apostas
         pay() #paga os vencedores
         remove_players_break() # remove players que ficaram sem dinheiro
 
@@ -133,15 +176,36 @@ def test():
     jose = Player('jose', 1500)
     joao = Player('joao', 1500)
     juca = Player('juca', 1500)
-    game = TexasHoldem([jose, joao, juca], 30,60,3)
+    game = TexasHoldem([jose, joao, juca], 30, 60,3)
+    shuffle2a(game.deck)
     assert len(game.draw(game.deck, 1)) == 1
     map(game.collect_ant, itertools.ifilter(lambda player: player.active, game.players)) #collect ant
     assert game.pot == 9
     map(game.receives_card, itertools.ifilter(lambda player: player.active, game.players)) #distribuite cards
     assert len(game.deck) == 45
-    game.collect_blind()
+    game.collect_blind() #collect blind
     assert game.pot == 99
+    import pdb;pdb.set_trace()
     game.betting(1)
+    import pdb;pdb.set_trace()
+    game.flop.extend(game.draw(game.deck, 5))
+    assert len(game.flop) == 5
+    game.flop = ['AS','AC','TD','JS','TS']
+    joao.cards = ['AH', 'JH']
+    jose.cards = ['4H','4S']
+    juca.cards = ['7H','8S']
+    game.pay()
+    assert joao.stack == 1536
+    map(game.collect_ant, itertools.ifilter(lambda player: player.active, game.players)) #collect ant
+    game.collect_blind() #collect blind
+    juca.cards = ['7H','8S']
+    joao.cards = ['AH', 'JH']
+    jose.cards = ['AD','JH']
+    game.pay()
+    assert joao.stack == 1522
+    assert jose.stack == 1483
+
+
 
         
 test()

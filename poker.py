@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 """
 copied from course class https://www.udacity.com/wiki/cs212/
 """
