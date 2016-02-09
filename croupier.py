@@ -60,9 +60,7 @@ class TexasHoldem(object):
 
     def collect_ant(self, player):
         """ coleta os valores do ant e coloca no pote """
-        #zera variavel paid dos players
-        for player in itertools.ifilter(lambda player: player.active, self.players):
-            player.paid = 0
+        player.paid=0
         self.transaction(player, self.ant, ant=True)
 
 
@@ -94,7 +92,6 @@ class TexasHoldem(object):
     def betting(self, position_bet):
         """ funcao que controla a rodada de apostas 
         """
-        import pdb;pdb.set_trace()
         action = []
         blind = self.bigblind
         round_check = False
@@ -118,14 +115,15 @@ class TexasHoldem(object):
         while round_check == False:
            
             if position_bet == 1 and len(self.players)>2: players = self.players[2:]
-            elif position_bet == 1 and len(self.players)<=2: players = self.players
+            #elif position_bet == 1 and len(self.players)<=2: players = self.players
             else: players = self.players
             for player in itertools.ifilter(lambda x: x.active, players):
                 player_action(player, player.do(blind, action), blind)
                 
             #fez a primeira rodada de apostas e agora cobra do smallblind e do blind
-            if self.players[0].active: player_action(player, player.do(blind, action), blind) #vez do smallblind
-            elif self.players[1].active: player_action(player, player.do(blind, action), blind)
+            if position_bet == 1:
+                if self.players[0].active: player_action(self.players[0], self.players[0].do(blind, action), blind) #vez do smallblind
+                if self.players[1].active: player_action(self.players[1], self.players[1].do(blind, action), blind)
                 
         #verifica se esta tudo pago, senao repete rodada de apostas
             round_check = check()
@@ -201,18 +199,6 @@ def test():
     jose.cards = ['4H','4S']
     juca.cards = ['7H','8S']
     game.pay()
-    import pdb;pdb.set_trace()
-    assert joao.stack == 1536
-    map(game.collect_ant, itertools.ifilter(lambda player: player.active, game.players)) #collect ant
-    game.collect_blind() #collect blind
-    juca.cards = ['7H','8S']
-    joao.cards = ['AH', 'JH']
-    jose.cards = ['AD','JH']
-    game.pay()
-    assert joao.stack == 1522
-    assert jose.stack == 1483
-
-
-
-        
+    assert joao.stack == 1626
+    assert juca.stack == 1437
 test()
